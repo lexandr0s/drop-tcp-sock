@@ -7,6 +7,7 @@
 //
 // Ilya V. Matveychikov, 2018
 //
+// fix for kernel >5.5 - lexandr0s, 2020
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -165,12 +166,21 @@ static int dts_proc_release(struct inode *inode, struct file *file)
 	} return 0;
 }
 
-static const struct file_operations dts_proc_fops = {
-	.owner = THIS_MODULE,
-	.open = dts_proc_open,
-	.write = dts_proc_write,
-	.release = dts_proc_release,
-};
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 5, 0)
+	static const struct proc_ops dts_proc_fops = {
+		.proc_open = dts_proc_open,
+		.proc_write = dts_proc_write,
+		.proc_release = dts_proc_release,
+	};
+#else
+	static const struct file_operations dts_proc_fops = {
+		.owner = THIS_MODULE,
+		.open = dts_proc_open,
+		.write = dts_proc_write,
+		.release = dts_proc_release,
+	};	
+#endif
 
 static int dts_pernet_id = 0;
 
@@ -180,6 +190,7 @@ static int dts_pernet_init(struct net *net)
 	struct dts_pernet *dts = net_generic(net, dts_pernet_id);
 	dts->net = net;
 	dts->pde = proc_create_data(DTS_PDE_NAME, 0600, net->proc_net, &dts_proc_fops, dts);
+//	dts->pde = proc_create_data(DTS_PDE_NAME, 0600, net->proc_net, &dts_proc_ops, dts);
 	return !dts->pde;
 }
 static void dts_pernet_exit(struct net* net)
